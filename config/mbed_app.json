@@ -1,0 +1,23 @@
+{
+    "config": {
+        "network-interface":{
+            "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, MESH_LOWPAN_ND, MESH_THREAD",
+            "value": "ETHERNET"
+        },
+        "main-stack-size": {
+            "value": 8144
+        }
+    },
+    "target_overrides": {
+        "*": {
+        }
+    },
+    "macros": [
+        "USE_CBOR_CONTEXT",
+        "MBED_HEAP_STATS_ENABLED=1",
+        "MBED_STACK_STATS_ENABLED=1",
+        "MBED_MEM_TRACING_ENABLED"
+    ]
+}
+
+ 

@@ -1,0 +1,8 @@
+a.bat
+BUILD
+*.lib
+
+
+# emacs
+*~
+#*

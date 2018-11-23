@@ -1,0 +1,32 @@
+{
+    "config": {
+        "network-interface":{
+            "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, MESH_LOWPAN_ND, MESH_THREAD",
+            "value": "ETHERNET"
+        },
+        "main-stack-size": {
+            "value": 6144
+        }
+    },
+    "target_overrides": {
+        "*": {
+            "platform.stdio-baud-rate": 115200,
+            "mbed-trace.enable": 0
+        }
+    },
+    "macros": [
+        "USE_CBOR_CONTEXT",
+        "MBED_HEAP_STATS_ENABLED=0",
+        "MBED_STACK_STATS_ENABLED=0",
+        "MBED_MEM_TRACING_ENABLED=0",
+        "SN_COAP_DUPLICATION_MAX_MSGS_COUNT=5",
+        "ACE_MBED_TLS=1",
+        "ACE_OSCORE=0",
+        "MBEDTLS_KEY_EXCHANGE_PSK_ENABLED",
+        "MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED",
+        "CBOR_NO_FLOAT",
+        "USE_MBED_TLS"
+    ]
+}
+
+ 
