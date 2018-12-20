@@ -29,5 +29,8 @@ extern MyTlsSession * MyTlsOpenSession(const char * rsAddress, int rsPort, uint8
 extern int MyTlsWrite( mbedtls_ssl_context * ptlsContext, uint8_t * buffer, size_t len);
 extern int MyTlsRead( mbedtls_ssl_context * ptlsContext, uint8_t * buffer, size_t len);
 
+extern void ProcessIncomingMessage(const char * address, uint16_t port, uint8_t * recv_buffer, nsapi_size_or_error_t ret);
+
+
 #endif // ACE_EMBED_TLS
 #endif // __MYTLS_H__

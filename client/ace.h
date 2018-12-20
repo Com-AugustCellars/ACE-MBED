@@ -59,3 +59,6 @@ extern EventQueue MyQueue;
 
 extern bool SendMessage(sn_coap_hdr_s * coap_msg_ptr, void * data,  coap_msg_delivery callback, const char * address, int port);
 
+
+
+extern void ProcessIncomingMessage(const char * address, uint16_t port, uint8_t * recv_buffer, nsapi_size_or_error_t ret);

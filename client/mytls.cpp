@@ -9,6 +9,7 @@
 
 #include "mytls.h"
 
+#if ACE_MBED_TLS
 
 mbedtls_ssl_config TlsConfig;
 
@@ -37,9 +38,8 @@ int MyTlsReceive(void * ctx, unsigned char * buf, size_t len)
 {
     MyTlsSession * myTlsSession = (MyTlsSession *) ctx;
     SocketAddress addr;
-    uint8_t* recv_buffer = (uint8_t*)malloc(1280+500); // Suggested is to keep packet size under 1280 bytes
 
-    int ret = myTlsSession->socket.recvfrom(&addr, recv_buffer, 1280+500);
+    int ret = myTlsSession->socket.recvfrom(&addr, buf, len);
     if (ret < 0) {
         return ret; // ????
     }
@@ -51,11 +51,10 @@ int MyTlsReceiveTimeout(void * ctx, unsigned char * buf, size_t len, uint32_t ti
 {
     MyTlsSession * myTlsSession = (MyTlsSession *) ctx;
     SocketAddress addr;
-    uint8_t* recv_buffer = (uint8_t*)malloc(1280+500); // Suggested is to keep packet size under 1280 bytes
 
     myTlsSession->socket.set_timeout(timeout);
     
-    int ret = myTlsSession->socket.recvfrom(&addr, recv_buffer, 1280+500);
+    int ret = myTlsSession->socket.recvfrom(&addr, buf, len);
     if (ret < 0) {
         if (ret == NSAPI_ERROR_WOULD_BLOCK) {
             return MBEDTLS_ERR_SSL_TIMEOUT;
@@ -73,11 +72,14 @@ void recvFromTls(void * param)
     int ret;
     uint8_t * recv_buffer = (uint8_t *) malloc(1280);
 
-    while ((ret = MyTlsRead(&tlsSession->tlsContext, recv_buffer, 1280)) != 0) {
+    while (true) {
+        ret = MyTlsRead(&tlsSession->tlsContext, recv_buffer, 1280);
         if (ret < 0) {
             if ((ret == MBEDTLS_ERR_SSL_WANT_READ) ||
                 (ret == MBEDTLS_ERR_SSL_WANT_WRITE)) {
                 // sleep and continue
+                wait(0.1);
+                continue;
             }
             else {
                 //  This is fatal and should cause the entire session to be destroyed.
@@ -86,6 +88,10 @@ void recvFromTls(void * param)
         }
         
         //  Make the common code in recvfromMain be a subroutine
+
+        if (ret > 0) {
+            ProcessIncomingMessage(tlsSession->addr_ptr, tlsSession->port, recv_buffer, ret);
+        }
     }
 }
 
@@ -128,9 +134,12 @@ int MyTlsRelease()
 
 extern EthernetInterface net;
 
-MyTlsSession * MyTlsOpenSession(const char * rsAddress, int rsPort, uint8_t * psk, int psk_len, uint8_t * psk_id, int psk_id_len)
+extern int my_mbedtls_timing_get_delay( void *data );
+extern void my_mbedtls_timing_set_delay( void *data, uint32_t int_ms, uint32_t fin_ms );
+
+
+MyTlsSession * MyTlsOpenSession(const char * rsAddress, int rsPort, uint8_t * psk_id, int psk_id_len, uint8_t * psk, int psk_len)
 {
-    int i;
     int ret;
 
     MyTlsSession * tlsSession = new MyTlsSession();
@@ -148,8 +157,8 @@ MyTlsSession * MyTlsOpenSession(const char * rsAddress, int rsPort, uint8_t * ps
     tlsSession->port = rsPort;
     
     mbedtls_ssl_set_bio(&tlsSession->tlsContext, tlsSession, MyTlsSend, MyTlsReceive, MyTlsReceiveTimeout);
-    mbedtls_ssl_set_timer_cb( &tlsSession->tlsContext, &tlsSession->timer, mbedtls_timing_set_delay,
-                              mbedtls_timing_get_delay );
+    mbedtls_ssl_set_timer_cb( &tlsSession->tlsContext, &tlsSession->timer, my_mbedtls_timing_set_delay,
+                              my_mbedtls_timing_get_delay );
 
     mbedtls_ssl_conf_psk(&TlsConfig, psk, psk_len, psk_id, psk_id_len);
 
@@ -166,7 +175,7 @@ MyTlsSession * MyTlsOpenSession(const char * rsAddress, int rsPort, uint8_t * ps
 
     //  Start the read thread
 
-    tlsSession->thread.start(callback(&recvFromTls, &tlsSession));
+    tlsSession->thread.start(callback(&recvFromTls, tlsSession));
 
     return tlsSession;
 }
@@ -206,7 +215,10 @@ int MyTlsClose( mbedtls_ssl_context * ptlsContext )
     }
     while ( ret == MBEDTLS_ERR_SSL_WANT_WRITE );
 
+    //  M00BUG: Need to close the reading thread.
+
     mbedtls_ssl_free( ptlsContext );
 
     return 0;
 }
+#endif // ACE_MBED_TLS

@@ -8,7 +8,7 @@
 #include "mbedtls/debug.h"
 #include "mbedtls/timing.h"
 
-unsigned long mbedtls_timing_get_timer( struct mbedtls_timing_hr_time *val, int reset )
+unsigned long my_mbedtls_timing_get_timer( struct mbedtls_timing_hr_time *val, int reset )
 {
     time_t * t = (time_t *) val;
 
@@ -24,7 +24,7 @@ unsigned long mbedtls_timing_get_timer( struct mbedtls_timing_hr_time *val, int 
         time_t now;
         // gettimeofday( &now, NULL );
         now = time(NULL);
-        delta = ( now  - *t  ) * 1000ul;
+        delta = ( now  - *t  ) * 100ul;
         return( delta );
     }
 }
@@ -32,7 +32,7 @@ unsigned long mbedtls_timing_get_timer( struct mbedtls_timing_hr_time *val, int 
 /*
  * Get number of delays expired
  */
-int mbedtls_timing_get_delay( void *data )
+int my_mbedtls_timing_get_delay( void *data )
 {
     mbedtls_timing_delay_context *ctx = (mbedtls_timing_delay_context *) data;
     unsigned long elapsed_ms;
@@ -40,7 +40,9 @@ int mbedtls_timing_get_delay( void *data )
     if( ctx->fin_ms == 0 )
         return( -1 );
 
-    elapsed_ms = mbedtls_timing_get_timer( &ctx->timer, 0 );
+    return 0;
+
+    elapsed_ms = my_mbedtls_timing_get_timer( &ctx->timer, 0 );
 
     if( elapsed_ms >= ctx->fin_ms )
         return( 2 );
@@ -54,7 +56,7 @@ int mbedtls_timing_get_delay( void *data )
 /*
  * Set delays to watch
  */
-void mbedtls_timing_set_delay( void *data, uint32_t int_ms, uint32_t fin_ms )
+void my_mbedtls_timing_set_delay( void *data, uint32_t int_ms, uint32_t fin_ms )
 {
     mbedtls_timing_delay_context *ctx = (mbedtls_timing_delay_context *) data;
 
@@ -62,5 +64,5 @@ void mbedtls_timing_set_delay( void *data, uint32_t int_ms, uint32_t fin_ms )
     ctx->fin_ms = fin_ms;
 
     if( fin_ms != 0 )
-        (void) mbedtls_timing_get_timer( &ctx->timer, 1 );
+        (void) my_mbedtls_timing_get_timer( &ctx->timer, 1 );
 }

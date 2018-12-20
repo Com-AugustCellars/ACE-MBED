@@ -54,9 +54,9 @@ extern void DoAceGetResponse(int i);
 struct coap_s* coapHandle;
 coap_version_e coapVersion = COAP_VERSION_1;
 
-const char * RsAddress = "192.168.1.117";
+const char * RsAddress = "192.168.0.12";
 const int RsPort = 5683;
-const char * AsAddress = "192.168.1.117";
+const char * AsAddress = "192.168.0.12";
 #if ACE_MBED_TLS
 const int AsPort = 5689;
 #else
@@ -154,10 +154,62 @@ void print_memory_info()
 
 //EventQueue * queue = &Queue;
 
+//
+
+void ProcessIncomingMessage(const char * address, uint16_t port, uint8_t * recv_buffer, nsapi_size_or_error_t ret)
+{
+    int i;
+    
+    sn_nsdl_addr_s srcAddr = {0, SN_NSDL_ADDRESS_TYPE_IPV4, port, (uint8_t *) address};
+    srcAddr.addr_len = strlen((char *) srcAddr.addr_ptr);
+
+    sn_coap_hdr_s* parsed = sn_coap_protocol_parse(coapHandle, &srcAddr, ret, recv_buffer, NULL);
+    if (parsed == NULL) {
+        return;
+    }
+
+    if (parsed->msg_type == COAP_MSG_TYPE_CONFIRMABLE) {
+        sn_coap_protocol_send_ack(coapHandle, parsed->msg_id, parsed->token_ptr, parsed->token_len, &srcAddr, NULL);
+    }
+
+
+    if (parsed->coap_status == COAP_STATUS_PARSER_DUPLICATED_MSG) {
+        free(parsed);
+        return;
+    }
+
+    if (parsed->msg_code == COAP_MSG_CODE_EMPTY) {
+        //  For now ignore any ACKs
+        free(parsed);
+        return;
+    }
+
+    for (i=0; i<10; i++) {
+        if (PendingMessages[i].active &&
+            PendingMessages[i].token_len == parsed->token_len &&
+            memcmp(PendingMessages[i].token_ptr, parsed->token_ptr, parsed->token_len) == 0) {
+                
+            PendingMessages[i].active = false;
+            PendingMessages[i].sn_coap_response = parsed;
+            PendingMessages[i].token_len = 0;
+            if (PendingMessages[i].token_ptr != NULL) {
+                free(PendingMessages[i].token_ptr);
+                PendingMessages[i].token_ptr = NULL;
+            }
+
+            MyQueue.call(PendingMessages[i].callbackFn, i);
+            break;
+        }
+    }
+
+    if (i == 10) {
+        free(parsed);
+    }
+}
+
 // Main function for the recvfrom thread
 void recvfromMain()
 {
-    int i;
     SocketAddress addr;
     uint8_t* recv_buffer = (uint8_t*)malloc(1280); // Suggested is to keep packet size under 1280 bytes
 
@@ -168,52 +220,8 @@ void recvfromMain()
 
 
         // printf("Received a message of length '%d'\n", ret);
-
-        sn_nsdl_addr_s srcAddr = {0, SN_NSDL_ADDRESS_TYPE_IPV4, addr.get_port(), (uint8_t *) addr.get_ip_address()};
-        srcAddr.addr_len = strlen((char *) srcAddr.addr_ptr);
-
-        sn_coap_hdr_s* parsed = sn_coap_protocol_parse(coapHandle, &srcAddr, ret, recv_buffer, NULL);
-        if (parsed == NULL) {
-            continue;
-        }
-
-        if (parsed->msg_type == COAP_MSG_TYPE_CONFIRMABLE) {
-            sn_coap_protocol_send_ack(coapHandle, parsed->msg_id, parsed->token_ptr, parsed->token_len, &srcAddr, NULL);
-        }
-
-
-        if (parsed->coap_status == COAP_STATUS_PARSER_DUPLICATED_MSG) {
-            free(parsed);
-            continue;
-        }
-
-        if (parsed->msg_code == COAP_MSG_CODE_EMPTY) {
-            //  For now ignore any ACKs
-            free(parsed);
-            continue;
-        }
-
-        for (i=0; i<10; i++) {
-            if (PendingMessages[i].active &&
-                PendingMessages[i].token_len == parsed->token_len &&
-                memcmp(PendingMessages[i].token_ptr, parsed->token_ptr, parsed->token_len) == 0) {
-                
-                PendingMessages[i].active = false;
-                PendingMessages[i].sn_coap_response = parsed;
-                PendingMessages[i].token_len = 0;
-                if (PendingMessages[i].token_ptr != NULL) {
-                    free(PendingMessages[i].token_ptr);
-                    PendingMessages[i].token_ptr = NULL;
-                }
-
-                MyQueue.call(PendingMessages[i].callbackFn, i);
-                break;
-            }
-        }
-
-        if (i == 10) {
-            free(parsed);
-        }
+        
+        ProcessIncomingMessage(addr.get_ip_address(), addr.get_port(), recv_buffer, ret);
     }
 
     free(recv_buffer);
@@ -273,7 +281,8 @@ bool SendMessage(sn_coap_hdr_s * coap_msg_ptr, void * data,  coap_msg_delivery c
         memcpy(PendingMessages[i].token_ptr, coap_msg_ptr->token_ptr, coap_msg_ptr->token_len);
     }
 
-    sn_nsdl_addr_s dst_addr = {(uint8_t) strlen(address), SN_NSDL_ADDRESS_TYPE_IPV4, port, (uint8_t *) address};
+    sn_nsdl_addr_s dst_addr = {(uint8_t) strlen(address), SN_NSDL_ADDRESS_TYPE_IPV4,
+                               (uint16_t) port, (uint8_t *) address};
 
     int cb = sn_coap_protocol_build(coapHandle, &dst_addr, message_ptr, coap_msg_ptr, NULL);
 
@@ -336,7 +345,12 @@ void DoGetResponse(int index)
     printCoapMsg(PendingMessages[index].sn_coap_response);
 
     if (PendingMessages[index].sn_coap_response->msg_code == COAP_MSG_CODE_RESPONSE_UNAUTHORIZED) {
-        MakeAceRequest(&PendingMessages[index], "aud2", "read",
+        MakeAceRequest(&PendingMessages[index],
+#if ACE_MBED_TLS
+                       "aud2_dtls", "read",
+#else
+                       "aud2", "read",
+#endif
                        DoGetResponse, DoGetResponse, RsAddress, RsPort);
     }
 
@@ -542,7 +556,7 @@ void DoAceGetResponse(int index)
     printCoapMsg(PendingMessages[index].sn_coap_response);
 
     if (PendingMessages[index].sn_coap_response->msg_code == COAP_MSG_CODE_RESPONSE_UNAUTHORIZED) {
-        if (MakeAceRequest(&PendingMessages[index], "aud2", "read",
+        if (MakeAceRequest(&PendingMessages[index], "aud2_dtls", "read",
                            DoGetResponse, DoGetResponse, RsAddress, RsPort)) {
             return;
         }

@@ -23,6 +23,9 @@ typedef struct {
     char * path;
 } URL;
 
+const char * Psk_Name = "K64F_PSK";
+uint8_t Psk_Value[] = { 0xaa, 0xAA, 0xbb, 0xBB, 0xcc, 0xCC, 0xdd, 0xDD, 0xee, 0xEE };
+
 
 ////    UrlParse - parse a URL to pieces
 //
@@ -173,7 +176,8 @@ bool MakeAceRequest(CoapMessageItem * messageData, const char * audience, const 
 
 #if ACE_MBED_TLS
     //  M00BUG - Need to find the key not hard code.
-    MyTlsSession * aceTlsSession = MyTlsOpenSession(AsAddress, AsPort, (uint8_t *) "PSK", 3, (uint8_t *) "PSK_ID", 5);
+    MyTlsSession * aceTlsSession = MyTlsOpenSession(AsAddress, AsPort, (uint8_t *) Psk_Name, strlen(Psk_Name),
+                                                    Psk_Value, sizeof(Psk_Value));
     if (aceTlsSession == NULL) {
         return false;
     }
